@@ -84,8 +84,10 @@ class TNNColumnLayer(nn.Module):
         # self.rows * self.cols gives the total number of RFs (equiavalently the total number of TNN columns) in
         # the current layer.
         # Note that each RF maps to a single TNN column.
-        self.rows          = ((inputsize[0]-rfsize[0])//stride) + 1
-        self.cols          = ((inputsize[1]-rfsize[1])//stride) + 1
+        #self.rows          = ((inputsize[0]-rfsize[0])//stride) + 1
+        #self.cols          = ((inputsize[1]-rfsize[1])//stride) + 1
+        self.rows = 1
+        self.cols = 1
 
         # Note that each input in an nxn RF goes to all neurons within the corresponding column and each RF input
         # has nprev values/channels. Therefore each neuron gets n^2*nprev inputs resulting in as many synapses.
@@ -140,9 +142,15 @@ class TNNColumnLayer(nn.Module):
         ### Generate all the RFs from input data ###
         # Note, all neurons within a particular neuron see the same set of input spiketimes.
         # Finally, it's reshaped to (nums, p) to match the shape of weights.
+        #print(data.shape)
+        #print(data)
+        #print("-")
 
-        sliced_data                              = data.unfold(0, self.rfsize[0], self.stride).unfold(1, self.rfsize[1],self.stride)
-        input_spiketimes                         = sliced_data.unsqueeze(2).repeat(1,1,self.q,1,1,1).reshape(self.num,self.p)
+        sliced_data                              = data.unfold(0, self.rfsize[0], self.stride).unfold(1, 2 ,self.stride)
+        #print(sliced_data.shape)
+        #sliced_data                              = data.unfold(0, self.rfsize[0], self.stride)
+        #print(sliced_data.unsqueeze(1).repeat(1,1,self.q,3,1,1).shape)
+        input_spiketimes                         = sliced_data.unsqueeze(2).repeat(1,1,self.q,3,1,1).reshape(self.num,self.p)
 
         ### Simulate SNL response function and calculate SNL output spiketimes for all neurons in the layer ###
         # "ec_times" holds the excitatory column spiketimes before LI for all neurons in the layer.
