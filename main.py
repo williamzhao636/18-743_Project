@@ -1,5 +1,5 @@
 import sys
-sys.path[-1] = "/usr/local/lib/python3.9/site-packages"
+#sys.path[-1] = "/usr/local/lib/python3.9/site-packages"
 
 import torch
 import torch.nn as nn
@@ -125,12 +125,14 @@ for epochs in range(1):
             break
         print("Sample: {0}\r".format(idx), end="")
 
+        print("start")
         print(len(data[0]), len(data[0][0]))
         print(data[0], target)
         
         # Error because we are using the old lab solution with new data format
         # Need to change lab solution to accept a 2 x 1 x 3 dimension tensor
-        layer_in1, layer_out1 = clayer(data[0].permute(1,0))
+        #print(clayer(data[0].permute(1,0)))
+        out1, layer_in1, layer_out1 = clayer(data[0].permute(1,0))
         # out1, layer_in1, layer_out1 = clayer(data[0].permute(1,2,0))
         clayer.weights = clayer.stdp(layer_in1, layer_out1, clayer.weights, ucapture, usearch, ubackoff)
 
