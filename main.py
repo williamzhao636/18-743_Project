@@ -1,5 +1,5 @@
 import sys
-#sys.path[-1] = "/usr/local/lib/python3.9/site-packages"
+sys.path[-1] = "/usr/local/lib/python3.9/site-packages"
 
 import torch
 import torch.nn as nn
@@ -66,14 +66,18 @@ def parse_group_csv(csv_file_name):
                 group_map[ind] = [float(row['x']), float(row['y']), float(row['z']), int(row['label'])]
     return group_map
 
-data = parse_group_csv("data/1.csv")
+dataset_train = parse_group_csv("data/1.csv")
+dataset_test = parse_group_csv("data/2.csv")
 
-data_train = AccelerometerDataset(data)
+data_train = AccelerometerDataset(dataset_train)
+data_test = AccelerometerDataset(dataset_test)
+
 data_train_loader = DataLoader(data_train, batch_size=1, shuffle=False)
-print(len(data_train))
+data_test_loader = DataLoader(data_test, batch_size=1, shuffle=False)
+# print(len(data_train))
 
 train_loader = data_train_loader
-test_loader = data_train_loader
+test_loader = data_test_loader
 
 
 
@@ -121,13 +125,14 @@ for epochs in range(1):
     start = time.time()
 
     for idx, (data,target) in enumerate(train_loader):
-        if idx == 162502:
+        # if idx == 162502:
+        if idx >= 100000:
             break
         print("Sample: {0}\r".format(idx), end="")
 
-        print("start")
-        print(len(data[0]), len(data[0][0]))
-        print(data[0], target)
+        # print("start")
+        # print(len(data[0]), len(data[0][0]))
+        # print(data[0], target)
         
         # Error because we are using the old lab solution with new data format
         # Need to change lab solution to accept a 2 x 1 x 3 dimension tensor
@@ -141,20 +146,50 @@ for epochs in range(1):
 
     end   = time.time()
     print("Column training done in ", end-start)
+    # print("weights: ", clayer.weights)
+    '''
+    Here are the weights
+    
+    weights:  Parameter containing:
+    tensor([[3.9092, 7.0000, 7.0000, 3.5508, 7.0000, 7.0000, 3.9092, 7.0000, 7.0000,
+         3.5508, 7.0000, 7.0000, 3.9092, 7.0000, 7.0000, 3.5508, 7.0000, 7.0000],
+        [3.9092, 7.0000, 7.0000, 3.5508, 7.0000, 7.0000, 3.9092, 7.0000, 7.0000,
+         3.5508, 7.0000, 7.0000, 3.9092, 7.0000, 7.0000, 3.5508, 7.0000, 7.0000],
+        [3.9092, 7.0000, 7.0000, 3.5508, 7.0000, 7.0000, 3.9092, 7.0000, 7.0000,
+         3.5508, 7.0000, 7.0000, 3.9092, 7.0000, 7.0000, 3.5508, 7.0000, 7.0000],
+        [3.9092, 7.0000, 7.0000, 3.5508, 7.0000, 7.0000, 3.9092, 7.0000, 7.0000,
+         3.5508, 7.0000, 7.0000, 3.9092, 7.0000, 7.0000, 3.5508, 7.0000, 7.0000],
+        [3.9092, 7.0000, 7.0000, 3.5508, 7.0000, 7.0000, 3.9092, 7.0000, 7.0000,
+         3.5508, 7.0000, 7.0000, 3.9092, 7.0000, 7.0000, 3.5508, 7.0000, 7.0000],
+        [3.9092, 7.0000, 7.0000, 3.5508, 7.0000, 7.0000, 3.9092, 7.0000, 7.0000,
+         3.5508, 7.0000, 7.0000, 3.9092, 7.0000, 7.0000, 3.5508, 7.0000, 7.0000],
+        [3.9092, 7.0000, 7.0000, 3.5508, 7.0000, 7.0000, 3.9092, 7.0000, 7.0000,
+         3.5508, 7.0000, 7.0000, 3.9092, 7.0000, 7.0000, 3.5508, 7.0000, 7.0000],
+        [3.9092, 7.0000, 7.0000, 3.5508, 7.0000, 7.0000, 3.9092, 7.0000, 7.0000,
+         3.5508, 7.0000, 7.0000, 3.9092, 7.0000, 7.0000, 3.5508, 7.0000, 7.0000],
+        [3.9092, 7.0000, 7.0000, 3.5508, 7.0000, 7.0000, 3.9092, 7.0000, 7.0000,
+         3.5508, 7.0000, 7.0000, 3.9092, 7.0000, 7.0000, 3.5508, 7.0000, 7.0000],
+        [3.9092, 7.0000, 7.0000, 3.5508, 7.0000, 7.0000, 3.9092, 7.0000, 7.0000,
+         3.5508, 7.0000, 7.0000, 3.9092, 7.0000, 7.0000, 3.5508, 7.0000, 7.0000],
+        [3.9092, 7.0000, 7.0000, 3.5508, 7.0000, 7.0000, 3.9092, 7.0000, 7.0000,
+         3.5508, 7.0000, 7.0000, 3.9092, 7.0000, 7.0000, 3.5508, 7.0000, 7.0000],
+        [3.9092, 7.0000, 7.0000, 3.5508, 7.0000, 7.0000, 3.9092, 7.0000, 7.0000,
+         3.5508, 7.0000, 7.0000, 3.9092, 7.0000, 7.0000, 3.5508, 7.0000, 7.0000]])
+    '''
 
 
 ### Display and save weights as images ###
+'''
+if weights_save == 1:
 
-# if weights_save == 1:
+    image_list = []
+    for i in range(12):
+        temp = clayer.weights[i].reshape(56,28)
+        image_list.append(temp)
 
-#     image_list = []
-#     for i in range(12):
-#         temp = clayer.weights[i].reshape(56,28)
-#         image_list.append(temp)
-
-#     out = torch.stack(image_list, dim=0).unsqueeze(1)
-#     save_image(out, 'column_visweights_snl.png', nrow=6)
-
+    out = torch.stack(image_list, dim=0).unsqueeze(1)
+    save_image(out, 'column_visweights_snl.png', nrow=6)
+'''
 
 ### Testing and computing metrics ###
 
@@ -166,13 +201,17 @@ print("Starting testing")
 start    = time.time()
 
 for idx, (data,target) in enumerate(test_loader):
+    if idx >= 100000:
+        break
     print("Sample: {0}\r".format(idx), end="")
 
     if cuda:
         data                    = data.cuda()
         target                  = target.cuda()
 
-    out1, layer_in1, layer_out1 = clayer(data[0].permute(1,2,0))
+    # out1, layer_in1, layer_out1 = clayer(data[0].permute(1,2,0))
+    out1, layer_in1, layer_out1 = clayer(data[0].permute(1,0))
+    # print(out1, layer_in1, layer_out1)
     out = torch.flatten(out1)
 
     arg = torch.nonzero(out != float('Inf'))
