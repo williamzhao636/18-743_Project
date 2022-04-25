@@ -116,10 +116,10 @@ device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 
 ### Layer Initialization ###
 
-clayer = TNNColumnLayer(1, 3, 1, 2, 12, 400, ntype="snl", device=device)
+# Test different theta for snl and rnl versions
+clayer = TNNColumnLayer(1, 3, 1, 2, 12, 30, ntype="rnl", device=device)
 
 ### Training ###
-
 print("Starting column training")
 for epochs in range(1):
     start = time.time()
@@ -130,15 +130,7 @@ for epochs in range(1):
             break
         print("Sample: {0}\r".format(idx), end="")
 
-        # print("start")
-        # print(len(data[0]), len(data[0][0]))
-        # print(data[0], target)
-        
-        # Error because we are using the old lab solution with new data format
-        # Need to change lab solution to accept a 2 x 1 x 3 dimension tensor
-        #print(clayer(data[0].permute(1,0)))
         out1, layer_in1, layer_out1 = clayer(data[0].permute(1,0))
-        # out1, layer_in1, layer_out1 = clayer(data[0].permute(1,2,0))
         clayer.weights = clayer.stdp(layer_in1, layer_out1, clayer.weights, ucapture, usearch, ubackoff)
 
         endt                   = time.time()
@@ -202,6 +194,7 @@ start    = time.time()
 
 for idx, (data,target) in enumerate(test_loader):
     if idx >= 100000:
+    # if idx >= 1000:
         break
     print("Sample: {0}\r".format(idx), end="")
 
@@ -216,6 +209,10 @@ for idx, (data,target) in enumerate(test_loader):
 
     arg = torch.nonzero(out != float('Inf'))
 
+    # print(arg)
+    # print(target)
+    # print(table)
+
     if arg.shape[0] != 0:
         table[arg[0].long(), target[0]] += 1
 
@@ -225,6 +222,12 @@ for idx, (data,target) in enumerate(test_loader):
 end = time.time()
 print("Testing done in ", end-start)
 
+
+'''
+Each row is one neuron
+Each column in each row represents the weight that a particular input sample corresponds to a label
+Number in row 0, column 1 represents the weight that neuron 0 assigns to label 1
+'''
 print("Confusion Matrix:")
 print(table)
 
@@ -232,6 +235,8 @@ maxval   = torch.max(table, 1)[0]
 totals   = torch.sum(table, 1)
 pred     = torch.sum(maxval)
 covg_cnt = torch.sum(totals)
+
+# Purity of 0.4941 with SNL and 0.6726 with RNL
 
 print("Purity: ", pred/covg_cnt)
 print("Coverage: ", covg_cnt/(idx+1))
