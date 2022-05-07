@@ -1,3 +1,4 @@
+from base64 import encode
 import sys
 sys.path[-1] = "/usr/local/lib/python3.9/site-packages"
 
@@ -20,23 +21,55 @@ import time
 
 import csv
 
-# median across all acceleration is 2023
-class PosNeg(object):
-    def __init__(self, median):
-        self.median = median
+from typing import Optional
 
-    def __call__(self, tensor):
-        # maxt                                    = torch.max(tensor)
-        tensor[tensor >= self.median]           = float('Inf')
-        tensor[tensor <  self.median]           = 0
-        tensor_pos                              = tensor.clone()
-        tensor_pos[tensor_pos == 0]             = 1
-        tensor_pos[tensor_pos == float('Inf')]  = 0
-        tensor_pos[tensor_pos == 1]             = float('Inf')
-        out                    = torch.stack([tensor_pos,tensor])
-        return out
+def bernoulli(
+    datum: torch.Tensor,
+    time: Optional[int] = None,
+    dt: float = 1.0,
+    device="cpu",
+    **kwargs,
+) -> torch.Tensor:
+    # language=rst
+    """
+    Generates Bernoulli-distributed spike trains based on input intensity. Inputs must
+    be non-negative. Spikes correspond to successful Bernoulli trials, with success
+    probability equal to (normalized in [0, 1]) input value.
 
+    :param datum: Tensor of shape ``[n_1, ..., n_k]``.
+    :param time: Length of Bernoulli spike train per input variable.
+    :param dt: Simulation time step.
+    :return: Tensor of shape ``[time, n_1, ..., n_k]`` of Bernoulli-distributed spikes.
 
+    Keyword arguments:
+
+    :param float max_prob: Maximum probability of spike per Bernoulli trial.
+    """
+    # Setting kwargs.
+    max_prob = kwargs.get("max_prob", 1.0)
+
+    assert 0 <= max_prob <= 1, "Maximum firing probability must be in range [0, 1]"
+    assert (datum >= 0).all(), "Inputs must be non-negative"
+
+    shape, size = datum.shape, datum.numel()
+    datum = datum.flatten()
+
+    if time is not None:
+        time = int(time / dt)
+
+    # Normalize inputs and rescale (spike probability proportional to input intensity).
+    if datum.max() > 1.0:
+        datum /= datum.max()
+
+    # Make spike data from Bernoulli sampling.
+    if time is None:
+        spikes = torch.bernoulli(max_prob * datum).to(device)
+        spikes = spikes.view(*shape)
+    else:
+        spikes = torch.bernoulli(max_prob * datum.repeat([time, 1]))
+        spikes = spikes.view(time, *shape)
+
+    return spikes.byte()
 
 class AccelerometerDataset(Dataset):
     def __init__(self, values):
@@ -47,8 +80,10 @@ class AccelerometerDataset(Dataset):
         return 162502
 
     def __getitem__(self, index):
-        inter = PosNeg(2023)
-        return inter(torch.tensor(self.values[index][:-1])), self.values[index][-1]
+        encoded = bernoulli(torch.tensor(self.values[index][:-1]))
+        encoded = encoded.float()
+
+        return encoded, self.values[index][-1]
 
 
 def parse_group_csv(csv_file_name):
@@ -94,21 +129,13 @@ ubackoff  = 1/2
 
 
 ### Column Layer Parameters ###
-inputsize = 28
+inputsize = 1
 rfsize    = 3
 stride    = 1
 nprev     = 2
 neurons   = 12
-theta     = 4
+theta     = 5
 
-### Voter Layer Parameters ###
-rows_v    = 26
-cols_v    = 26
-nprev_v   = 12
-classes_v = 10
-thetav_lo = 1/32
-thetav_hi = 15/32
-tau_eff   = 2
 
 ### Enabling CUDA support for GPU ###
 cuda = torch.cuda.is_available()
@@ -117,7 +144,7 @@ device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 ### Layer Initialization ###
 
 # Test different theta for snl and rnl versions
-clayer = TNNColumnLayer(1, 3, 1, 2, 12, 30, ntype="rnl", device=device)
+clayer = TNNColumnLayer(inputsize, rfsize, stride, nprev, neurons, theta, ntype="rnl", device=device)
 
 ### Training ###
 print("Starting column training")
@@ -125,12 +152,15 @@ for epochs in range(1):
     start = time.time()
 
     for idx, (data,target) in enumerate(train_loader):
+        # print("Training data", data)
+        # print()
         # if idx == 162502:
         if idx >= 100000:
             break
         print("Sample: {0}\r".format(idx), end="")
 
-        out1, layer_in1, layer_out1 = clayer(data[0].permute(1,0))
+        # out1, layer_in1, layer_out1 = clayer(data[0].permute(1,0))
+        out1, layer_in1, layer_out1 = clayer(data[0])
         clayer.weights = clayer.stdp(layer_in1, layer_out1, clayer.weights, ucapture, usearch, ubackoff)
 
         endt                   = time.time()
@@ -138,37 +168,6 @@ for epochs in range(1):
 
     end   = time.time()
     print("Column training done in ", end-start)
-    # print("weights: ", clayer.weights)
-    '''
-    Here are the weights
-    
-    weights:  Parameter containing:
-    tensor([[3.9092, 7.0000, 7.0000, 3.5508, 7.0000, 7.0000, 3.9092, 7.0000, 7.0000,
-         3.5508, 7.0000, 7.0000, 3.9092, 7.0000, 7.0000, 3.5508, 7.0000, 7.0000],
-        [3.9092, 7.0000, 7.0000, 3.5508, 7.0000, 7.0000, 3.9092, 7.0000, 7.0000,
-         3.5508, 7.0000, 7.0000, 3.9092, 7.0000, 7.0000, 3.5508, 7.0000, 7.0000],
-        [3.9092, 7.0000, 7.0000, 3.5508, 7.0000, 7.0000, 3.9092, 7.0000, 7.0000,
-         3.5508, 7.0000, 7.0000, 3.9092, 7.0000, 7.0000, 3.5508, 7.0000, 7.0000],
-        [3.9092, 7.0000, 7.0000, 3.5508, 7.0000, 7.0000, 3.9092, 7.0000, 7.0000,
-         3.5508, 7.0000, 7.0000, 3.9092, 7.0000, 7.0000, 3.5508, 7.0000, 7.0000],
-        [3.9092, 7.0000, 7.0000, 3.5508, 7.0000, 7.0000, 3.9092, 7.0000, 7.0000,
-         3.5508, 7.0000, 7.0000, 3.9092, 7.0000, 7.0000, 3.5508, 7.0000, 7.0000],
-        [3.9092, 7.0000, 7.0000, 3.5508, 7.0000, 7.0000, 3.9092, 7.0000, 7.0000,
-         3.5508, 7.0000, 7.0000, 3.9092, 7.0000, 7.0000, 3.5508, 7.0000, 7.0000],
-        [3.9092, 7.0000, 7.0000, 3.5508, 7.0000, 7.0000, 3.9092, 7.0000, 7.0000,
-         3.5508, 7.0000, 7.0000, 3.9092, 7.0000, 7.0000, 3.5508, 7.0000, 7.0000],
-        [3.9092, 7.0000, 7.0000, 3.5508, 7.0000, 7.0000, 3.9092, 7.0000, 7.0000,
-         3.5508, 7.0000, 7.0000, 3.9092, 7.0000, 7.0000, 3.5508, 7.0000, 7.0000],
-        [3.9092, 7.0000, 7.0000, 3.5508, 7.0000, 7.0000, 3.9092, 7.0000, 7.0000,
-         3.5508, 7.0000, 7.0000, 3.9092, 7.0000, 7.0000, 3.5508, 7.0000, 7.0000],
-        [3.9092, 7.0000, 7.0000, 3.5508, 7.0000, 7.0000, 3.9092, 7.0000, 7.0000,
-         3.5508, 7.0000, 7.0000, 3.9092, 7.0000, 7.0000, 3.5508, 7.0000, 7.0000],
-        [3.9092, 7.0000, 7.0000, 3.5508, 7.0000, 7.0000, 3.9092, 7.0000, 7.0000,
-         3.5508, 7.0000, 7.0000, 3.9092, 7.0000, 7.0000, 3.5508, 7.0000, 7.0000],
-        [3.9092, 7.0000, 7.0000, 3.5508, 7.0000, 7.0000, 3.9092, 7.0000, 7.0000,
-         3.5508, 7.0000, 7.0000, 3.9092, 7.0000, 7.0000, 3.5508, 7.0000, 7.0000]])
-    '''
-
 
 ### Display and save weights as images ###
 '''
@@ -185,9 +184,9 @@ if weights_save == 1:
 
 ### Testing and computing metrics ###
 
-table    = torch.zeros((12,10))
-pred     = torch.zeros(10)
-totals   = torch.zeros(10)
+table    = torch.zeros((12,7))
+pred     = torch.zeros(7)
+totals   = torch.zeros(7)
 
 print("Starting testing")
 start    = time.time()
@@ -203,7 +202,8 @@ for idx, (data,target) in enumerate(test_loader):
         target                  = target.cuda()
 
     # out1, layer_in1, layer_out1 = clayer(data[0].permute(1,2,0))
-    out1, layer_in1, layer_out1 = clayer(data[0].permute(1,0))
+    # out1, layer_in1, layer_out1 = clayer(data[0].permute(1,0))
+    out1, layer_in1, layer_out1 = clayer(data[0])
     # print(out1, layer_in1, layer_out1)
     out = torch.flatten(out1)
 

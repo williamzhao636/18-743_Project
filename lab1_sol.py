@@ -91,7 +91,8 @@ class TNNColumnLayer(nn.Module):
 
         # Note that each input in an nxn RF goes to all neurons within the corresponding column and each RF input
         # has nprev values/channels. Therefore each neuron gets n^2*nprev inputs resulting in as many synapses.
-        self.p             = rfsize[0]*rfsize[1]*nprev
+        # self.p             = rfsize[0]*rfsize[1]*nprev
+        self.p             = 12
 
         # Number of neurons per column
         self.q             = q
@@ -142,14 +143,10 @@ class TNNColumnLayer(nn.Module):
         ### Generate all the RFs from input data ###
         # Note, all neurons within a particular neuron see the same set of input spiketimes.
         # Finally, it's reshaped to (nums, p) to match the shape of weights.
-        #print(data.shape)
-        #print(data)
-        #print("-")
 
         sliced_data                              = data.unfold(0, self.rfsize[0], self.stride).unfold(1, 2 ,self.stride)
-        #print(sliced_data.shape)
         #sliced_data                              = data.unfold(0, self.rfsize[0], self.stride)
-        #print(sliced_data.unsqueeze(1).repeat(1,1,self.q,3,1,1).shape)
+
         input_spiketimes                         = sliced_data.unsqueeze(2).repeat(1,1,self.q,3,1,1).reshape(self.num,self.p)
 
         ### Simulate SNL response function and calculate SNL output spiketimes for all neurons in the layer ###
