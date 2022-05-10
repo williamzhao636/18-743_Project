@@ -4,6 +4,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+encoding = 1
 
 ### TNN Column Layer ###
 ## This class models all the columns in a single layer based on the input size, kernel (or RF) size and stride.
@@ -91,7 +92,9 @@ class TNNColumnLayer(nn.Module):
 
         # Note that each input in an nxn RF goes to all neurons within the corresponding column and each RF input
         # has nprev values/channels. Therefore each neuron gets n^2*nprev inputs resulting in as many synapses.
-        self.p             = rfsize[0]*rfsize[1]*nprev*2
+        self.p             = rfsize[0]*rfsize[1]*nprev
+        if encoding:
+            self.p = self.p * 2
 
         # Number of neurons per column
         self.q             = q
@@ -145,8 +148,12 @@ class TNNColumnLayer(nn.Module):
 
         # sliced_data                              = data.unfold(0, self.rfsize[0], self.stride).unfold(1, self.rfsize[1],self.stride)
         # input_spiketimes                         = sliced_data.unsqueeze(2).repeat(1,1,self.q,1,1,1).reshape(self.num,self.p)
-        sliced_data                              = data.unfold(0, self.rfsize[0], self.stride).unfold(1, 2 ,self.stride)
-        input_spiketimes                         = sliced_data.unsqueeze(2).repeat(1,1,self.q,2,1,1).reshape(self.num,self.p)
+        if encoding:
+            sliced_data                              = data.unfold(0, self.rfsize[0], self.stride).unfold(1, 2 ,self.stride)
+            input_spiketimes                         = sliced_data.unsqueeze(2).repeat(1,1,self.q,2,1,1).reshape(self.num,self.p)
+        else:
+            sliced_data                              = data.unfold(0, self.rfsize[0], self.stride).unfold(1, 2 ,self.stride)
+            input_spiketimes                         = sliced_data.unsqueeze(2).repeat(1,1,self.q,3,1,1).reshape(self.num,self.p)
 
         ### Simulate SNL response function and calculate SNL output spiketimes for all neurons in the layer ###
         # "ec_times" holds the excitatory column spiketimes before LI for all neurons in the layer.

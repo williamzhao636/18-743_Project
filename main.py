@@ -20,6 +20,8 @@ import time
 
 import csv
 
+encoding = 1
+
 # median across all acceleration is 2023
 class PosNeg(object):
     def __init__(self, median):
@@ -36,7 +38,8 @@ class PosNeg(object):
         tensor_pos[tensor_pos == float('Inf')]  = 0
         tensor_pos[tensor_pos == 1]             = float('Inf')
         out                    = torch.stack([tensor_pos,tensor])
-        out = poisson(tensor, 10)
+        if encoding:
+            out = poisson(tensor, 10)
         # print('^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^')
         return out
 
@@ -120,14 +123,16 @@ def parse_group_csv(csv_file_name):
             try:
                 group_map[int(row['index'])] = [float(row['x']), float(row['y']), float(row['z']), int(row['label'])]
             except:
+                # print(row)
                 ind = row['index'].split('e')
+                # print(ind)
                 ind = float(ind[0]) * (10 ** 5)
                 ind = int(ind)
                 group_map[ind] = [float(row['x']), float(row['y']), float(row['z']), int(row['label'])]
     return group_map
 
 train_data = parse_group_csv("data/01.csv")
-test_data = parse_group_csv("data/02.csv")
+test_data = parse_group_csv("data/09.csv")
 
 data_train = AccelerometerDataset(train_data)
 data_test = AccelerometerDataset(test_data)
@@ -148,6 +153,35 @@ weights_save = 1
 ucapture  = 1/2
 usearch   = 1/2048
 ubackoff  = 1/2
+
+# Posneg
+
+# SNL
+# 1/2 1/1024 1/2 -> .4415
+# 1/2 1/9162 1/2 -> .4943
+# 1/8 1/1024 1/8 -> .7017
+# 1/16 1/1024 1/16 -> .7017
+# 1/16 1/9162 1/16 -> .7020
+# 1/16 1/9162 1/2 -> .7020
+# 1/2 1/9162 1/16 -> .6726
+# 1/32 1/9162 1/2 -> .6798
+
+# RNL
+# 1/2 1/1024 1/2 -> .6726
+# 1/4 1/1024 1/4 -> .6726
+# 1/2 1/2048 1/2 -> .6726
+# 1/8 1/2048 1/8 -> .6703
+# 1/16 1/2048 1/16 -> .6703
+# 1/32 1/2048 1/32 -> .6501
+# 1/2 1/4096 1/2 -> .6726
+# 1/2 1/9162 1/2 -> .7020
+# 1/2 1/18324 1/2 -> .7020
+# 1/2 1/1024 3/4 -> .6726
+# 1/16 1/9162 1/16 -> .6726
+# 1/32 1/9162 1/2 -> .7020
+
+# Poisson
+
 # SNL
 # 1/2 1/1024 1/2 -> .6497
 # 1/4 1/1024 1/4 -> .4689
@@ -208,7 +242,8 @@ device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 
 ### Layer Initialization ###
 
-clayer = TNNColumnLayer(1, 3, 1, 6, 12, 20, ntype="rnl", device=device)
+# clayer = TNNColumnLayer(1, 3, 1, 2, 12, 5, ntype="snl", device=device)
+clayer = TNNColumnLayer(1, 3, 1, 6, 12, 20, ntype="snl", device=device)
 # snl, 30 -> .4444
 # snl, 400 -> .4415
 # snl, 20 -> .6479
@@ -249,6 +284,17 @@ Coverage:  tensor(1.0000)
 # snl, 25 -> .4719
 # snl, 18 -> .4445
 # snl, 22 -> .4445
+
+# Posneg
+# snl 5 .6796
+# snl 10 .6270
+# snl 15 .4415
+# snl 20 .4415
+
+# rnl 5 .6726
+# rnl 10 .6726
+# rnl 15 .6726
+# rnl 20 .6726s
 ### Training ###
 
 print("Starting column training")
@@ -261,8 +307,10 @@ for epochs in range(1):
         
         # Error because we are using the old lab solution with new data format
         # Need to change lab solution to accept a 2 x 1 x 3 dimension tensor
-        out1, layer_in1, layer_out1 = clayer(data[0].permute(1,0))
-        # out1, layer_in1, layer_out1 = clayer(data[0].permute(1,2,0))
+        if encoding:
+            out1, layer_in1, layer_out1 = clayer(data[0].permute(1,0))
+        else:
+            out1, layer_in1, layer_out1 = clayer(data[0].permute(1,0))
         clayer.weights = clayer.stdp(layer_in1, layer_out1, clayer.weights, ucapture, usearch, ubackoff)
 
         endt                   = time.time()
@@ -295,15 +343,18 @@ print("Starting testing")
 start    = time.time()
 
 for idx, (data,target) in enumerate(test_loader):
-    if idx >= 100000:
+    if idx >= 99998:
         break
     print("Sample: {0}\r".format(idx), end="")
 
     if cuda:
         data                    = data.cuda()
         target                  = target.cuda()
-
-    out1, layer_in1, layer_out1 = clayer(data[0].permute(1,0))
+        
+    if encoding:
+        out1, layer_in1, layer_out1 = clayer(data[0].permute(1,0))
+    else:
+        out1, layer_in1, layer_out1 = clayer(data[0].permute(1,0))
     out = torch.flatten(out1)
 
     arg = torch.nonzero(out != float('Inf'))
